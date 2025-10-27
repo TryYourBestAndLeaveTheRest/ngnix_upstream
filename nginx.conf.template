@@ -3,44 +3,43 @@ events {
 }
 
 http {
-    # Define upstream pools
+    log_format upstreamlog '[$time_local] $remote_addr - $status - '
+                           'upstream: $upstream_addr - '
+                           'response_time: $upstream_response_time';
+
+    access_log /var/log/nginx/access.log upstreamlog;
+    error_log /var/log/nginx/error.log warn;
+
     upstream backend {
-        # Primary server (active pool)
         server app_${ACTIVE_POOL}:3000 max_fails=2 fail_timeout=5s;
-        
-        # Backup server (inactive pool)
-        server app_${BACKUP_POOL}:3000 backup;
+        server app_${BACKUP_POOL}:3000 backup max_fails=2 fail_timeout=5s;
     }
 
     server {
         listen 80;
-        server_name localhost;
-
-        # Proxy timeouts
-        proxy_connect_timeout 2s;
-        proxy_send_timeout 2s;
-        proxy_read_timeout 2s;
-
-        # Retry policy
-        proxy_next_upstream error timeout http_500 http_502 http_503 http_504;
-        proxy_next_upstream_tries 2;
-        proxy_next_upstream_timeout 5s;
-
+        
         location / {
             proxy_pass http://backend;
             
-            # Forward headers from upstream
-            proxy_pass_request_headers on;
+            # CRITICAL: Retry on these conditions
+            proxy_next_upstream error timeout invalid_header http_500 http_502 http_503 http_504;
+            proxy_next_upstream_tries 2;
+            proxy_next_upstream_timeout 4s;
             
-            # Preserve upstream headers
+            # Tight timeouts
+            proxy_connect_timeout 2s;
+            proxy_send_timeout 2s;
+            proxy_read_timeout 2s;
+            
+            # Headers
+            proxy_pass_request_headers on;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
             
-            # Don't modify response headers
-            proxy_pass_header X-App-Pool;
-            proxy_pass_header X-Release-Id;
+            # Disable buffering for immediate response
+            proxy_buffering off;
+            proxy_request_buffering off;
         }
     }
 }
