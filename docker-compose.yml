@@ -1,0 +1,15 @@
+version: '3.8'
+services:
+  blue:
+    image: yimikaade/wonderful:devops-stage-two
+    ports:
+      - "8080:3000"
+    environment:
+      - APP_COLOR=blue
+
+  green:
+    image: yimikaade/wonderful:devops-stage-two
+    ports:
+      - "9090:3000"
+    environment:
+      - APP_COLOR=green
